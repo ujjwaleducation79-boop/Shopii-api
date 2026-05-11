@@ -2003,45 +2003,9 @@ def _print_banner():
     print("="*50)
 
 
-from flask import Flask, request, jsonify
-import asyncio
-import os
-
-app = Flask(__name__)
-
-@app.route('/', methods=['GET'])
-def main_check():
-    cc = request.args.get('cc')
-    site = request.args.get('url') or request.args.get('site')
-    proxy = request.args.get('proxy')
-    
-    if not cc or not site:
-        return jsonify({"status": "Error", "message": "Missing cc or url parameter", "error_code": "PARAM_MISSING"}), 400
-
-    try:
-        result = asyncio.run(run_shopify_check(
-            site_url=site.strip(),
-            card_str=cc.strip(),
-            verbose=False,
-            timeout=70
-        ))
-        
-        # Convert result to match old API style
-        status = str(result.get("status", "")).lower()
-        if status in ["declined", "decline"]:
-            return jsonify({
-                "status": "Declined",
-                "message": result.get("message", "Card Declined"),
-                "price": result.get("price", "")
-            })
-        else:
-            return jsonify(result)
-            
-    except Exception as e:
-        return jsonify({"status": "Error", "message": str(e), "error_code": "CHECK_FAILED"}), 500
-
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Old Style API Running on port {port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    _print_banner()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nInterrupted by user, exiting.")
