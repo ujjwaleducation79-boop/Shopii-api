@@ -2018,12 +2018,22 @@ def _print_banner():
     print("="*50)
 
 
-# ====================== FLASK WEB SERVER (Fixed) ======================
+# ====================== FLASK SERVER FOR RENDER ======================
 from flask import Flask, request, jsonify
 import asyncio
 import os
 
 app = Flask(__name__)
+
+# Root Route - Important for Render Health Check
+@app.route('/')
+def home():
+    return """
+    <h1>✅ Shopify API is Running Successfully!</h1>
+    <p>Use: <code>/shopify?site=...&cc=...</code></p>
+    <br>
+    <a href="/shopify?site=https://order.sandttoo.com&cc=5196032157784998|08|2027|946">Test API</a>
+    """
 
 @app.route('/shopify', methods=['GET'])
 def shopify_check():
@@ -2031,10 +2041,9 @@ def shopify_check():
     cc = request.args.get('cc')
     
     if not site or not cc:
-        return jsonify({"status": "error", "message": "Missing parameters"}), 400
+        return jsonify({"status": "error", "message": "Missing site or cc parameter"}), 400
 
     try:
-        # Call your main async function
         result = asyncio.run(run_shopify_check(
             site_url=site.strip(),
             card_str=cc.strip(),
@@ -2046,8 +2055,9 @@ def shopify_check():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-# Important for Render
+# Render Requires This
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))   # Render uses $PORT
-    print(f"🚀 Shopify API running on port {port}")
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Shopify API Started on port {port}")
+    print(f"✅ Live at: http://0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)
