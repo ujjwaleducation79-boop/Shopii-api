@@ -1020,44 +1020,29 @@ async def main():
             print(f"❌ An error occurred in main: {e}")
 
 
-async def check_site_fast(site_url, proxy_url=None, max_price=40.0, min_price=1.0):
-    """Fast site validation using the API server"""
-    try:
-        # Call the local Flask API
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45)) as session:
-            async with session.get(
-                "http://localhost:5000/",
-                params={"site": site_url, "cc": TEST_CCS[0]},
-                ssl=False
-            ) as resp:
-                
-                if resp.status != 200:
-                    return False, f"API Error {resp.status}"
-                
-                data = await resp.json()
-                
-                status = str(data.get("status", "")).lower()
-                message = str(data.get("message", "")).lower()
-                error_code = str(data.get("error_code", "")).lower()
-                
-                # Accept site if we got any clear response from Shopify (even Declined)
-                if status in ["declined", "approved", "charged", "success"] or "declined" in message or "generic_error" in error_code:
-                    # Optional: Check price
-                    try:
-                        price = float(data.get("price", 0))
-                        if price > max_price or price < min_price:
-                            return False, f"Price ${price} out of range"
-                    except:
-                        pass
-                    return True, "Working (Declined/Approved)"
-                
-                elif "site down" in message or "blocked" in message or "error" in status:
-                    return False, data.get("message", "Site not responding")
-                else:
-                    return False, f"Unknown response: {status}"
-                    
-    except Exception as e:
-        return False, f"Connection Error: {str(e)[:80]}"
+async def check_site_fast(site_url, proxy_url=None, max_price=40.0, min_price=10.0):
+    """
+    Fast site check: only GET products.json. Returns dict with ok, price, product, available.
+    Use when adding sites (no full checkout). ~1 request, ~1–2 sec.
+    Finds the LOWEST priced available product (excluding free/very cheap items).
+    """
+    site_url = site_url.strip().rstrip("/")
+    fingerprint = get_random_fingerprint()
+    
+    # More complete headers to avoid blocks
+    product_header = {
+        "User-Agent": fingerprint.get("User-Agent", _FALLBACK_UA),
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": site_url,
+        "Origin": site_url,
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
     
     _proxy_fmt = None
     if proxy_url:
@@ -2018,48 +2003,9 @@ def _print_banner():
     print("="*50)
 
 
-# ====================== FLASK SERVER - OLD STYLE COMPATIBLE ======================
-from flask import Flask, request, jsonify
-import asyncio
-import os
-
-app = Flask(__name__)
-
-# Root Route - Accepts old format
-@app.route('/', methods=['GET'])
-def shopify_check_old():
-    cc = request.args.get('cc') or request.args.get('card')
-    site = request.args.get('url') or request.args.get('site')
-    
-    if not site or not cc:
-        return jsonify({"status": "error", "message": "Missing cc or url parameter"}), 400
-
-    try:
-        result = asyncio.run(run_shopify_check(
-            site_url=site.strip(),
-            card_str=cc.strip(),
-            verbose=False,
-            timeout=70
-        ))
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# Also keep /shopify for new format (optional)
-@app.route('/shopify', methods=['GET'])
-def shopify_check_new():
-    return shopify_check_old()   # Reuse same function
-
-
-# Render Health Check
-@app.route('/health')
-def health():
-    return {"status": "live", "message": "Shopify API Working"}
-
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Shopify API Started on port {port}")
-    print(f"✅ Use: /?cc=...&url=...")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    _print_banner()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nInterrupted by user, exiting.")
