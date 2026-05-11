@@ -2018,31 +2018,23 @@ def _print_banner():
     print("="*50)
 
 
-# ====================== FLASK SERVER FOR RENDER ======================
+# ====================== FLASK SERVER - OLD STYLE COMPATIBLE ======================
 from flask import Flask, request, jsonify
 import asyncio
 import os
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return """
-    <h1>✅ Shopify API is Running Successfully!</h1>
-    <p><strong>Use this format:</strong></p>
-    <code>/shopify?site=https://example.com&cc=5509890034877216|06|28|333</code>
-    """
-
-@app.route('/shopify', methods=['GET'])
-def shopify_check():
-    site = request.args.get('site')
-    cc = request.args.get('cc')
+# Root Route - Accepts old format
+@app.route('/', methods=['GET'])
+def shopify_check_old():
+    cc = request.args.get('cc') or request.args.get('card')
+    site = request.args.get('url') or request.args.get('site')
     
     if not site or not cc:
-        return jsonify({"status": "error", "message": "Missing site or cc parameter"}), 400
+        return jsonify({"status": "error", "message": "Missing cc or url parameter"}), 400
 
     try:
-        # Make sure we use the correct function name from your file
         result = asyncio.run(run_shopify_check(
             site_url=site.strip(),
             card_str=cc.strip(),
@@ -2050,18 +2042,24 @@ def shopify_check():
             timeout=70
         ))
         return jsonify(result)
-        
     except Exception as e:
-        return jsonify({
-            "status": "error", 
-            "message": str(e),
-            "debug": "Check if run_shopify_check function exists"
-        }), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-# Render Required
+# Also keep /shopify for new format (optional)
+@app.route('/shopify', methods=['GET'])
+def shopify_check_new():
+    return shopify_check_old()   # Reuse same function
+
+
+# Render Health Check
+@app.route('/health')
+def health():
+    return {"status": "live", "message": "Shopify API Working"}
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Shopify API Started on port {port}")
-    print(f"✅ Live at: http://0.0.0.0:{port}")
+    print(f"✅ Use: /?cc=...&url=...")
     app.run(host="0.0.0.0", port=port, debug=False)
