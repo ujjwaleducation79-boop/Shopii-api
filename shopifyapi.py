@@ -2021,6 +2021,7 @@ def _print_banner():
 # ====================== FLASK WEB SERVER (Fixed) ======================
 from flask import Flask, request, jsonify
 import asyncio
+import os
 
 app = Flask(__name__)
 
@@ -2030,10 +2031,10 @@ def shopify_check():
     cc = request.args.get('cc')
     
     if not site or not cc:
-        return jsonify({"status": "error", "message": "Missing site or cc parameter"}), 400
+        return jsonify({"status": "error", "message": "Missing parameters"}), 400
 
     try:
-        # Run the async function
+        # Call your main async function
         result = asyncio.run(run_shopify_check(
             site_url=site.strip(),
             card_str=cc.strip(),
@@ -2045,7 +2046,8 @@ def shopify_check():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+# Important for Render
 if __name__ == "__main__":
-    print("🚀 Shopify API Server Started on http://localhost:5000")
-    print("✅ Ready for Telegram Bot connection...")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    port = int(os.environ.get("PORT", 5000))   # Render uses $PORT
+    print(f"🚀 Shopify API running on port {port}")
+    app.run(host="0.0.0.0", port=port, debug=False)
