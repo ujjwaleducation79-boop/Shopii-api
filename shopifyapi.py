@@ -1997,15 +1997,41 @@ async def _do_one_check(session, site_url, cc, mon, year, cvv, fingerprint, prox
     return {"status": "Error", "message": msg, "product": product_title, "price": price, "debug_steps": _steps}
 
 
-def _print_banner():
-    print("="*50)
-    print("  Shopify Checker - shopifyapi")
-    print("="*50)
+# ====================== FLASK WEB SERVER FOR RENDER ======================
+from flask import Flask, request, jsonify
+import asyncio
+import os
+
+app = Flask(__name__)
+
+@app.route('/', methods=['GET'])
+def main_check():
+    """Support old format: ?cc=...&url=..."""
+    cc = request.args.get('cc')
+    site = request.args.get('url') or request.args.get('site')
+    
+    if not cc or not site:
+        return jsonify({"status": "error", "message": "Missing cc or url parameter"}), 400
+
+    try:
+        result = asyncio.run(run_shopify_check(
+            site_url=site.strip(),
+            card_str=cc.strip(),
+            verbose=False,
+            timeout=75
+        ))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/health')
+def health():
+    return {"status": "live", "message": "Shopify API is Running"}
 
 
 if __name__ == "__main__":
-    _print_banner()
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nInterrupted by user, exiting.")
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Shopify API Started Successfully on port {port}")
+    print(f"✅ Test URL: http://yourdomain.com/?cc=5196032157784998|08|27|946&url=https://example.com")
+    app.run(host="0.0.0.0", port=port, debug=False)
