@@ -2025,14 +2025,12 @@ import os
 
 app = Flask(__name__)
 
-# Root Route - Important for Render Health Check
 @app.route('/')
 def home():
     return """
     <h1>✅ Shopify API is Running Successfully!</h1>
-    <p>Use: <code>/shopify?site=...&cc=...</code></p>
-    <br>
-    <a href="/shopify?site=https://order.sandttoo.com&cc=5196032157784998|08|2027|946">Test API</a>
+    <p><strong>Use this format:</strong></p>
+    <code>/shopify?site=https://example.com&cc=5509890034877216|06|28|333</code>
     """
 
 @app.route('/shopify', methods=['GET'])
@@ -2044,18 +2042,24 @@ def shopify_check():
         return jsonify({"status": "error", "message": "Missing site or cc parameter"}), 400
 
     try:
+        # Make sure we use the correct function name from your file
         result = asyncio.run(run_shopify_check(
             site_url=site.strip(),
             card_str=cc.strip(),
             verbose=False,
-            timeout=60
+            timeout=70
         ))
         return jsonify(result)
+        
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "status": "error", 
+            "message": str(e),
+            "debug": "Check if run_shopify_check function exists"
+        }), 500
 
 
-# Render Requires This
+# Render Required
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Shopify API Started on port {port}")
