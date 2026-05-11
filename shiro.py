@@ -2216,7 +2216,7 @@ def _send_hit_to_chat(message, status_label, price="", product="", response="", 
 
 
 # API endpoint for Shopify checks
-Maxx_API_URL = os.environ.get("Maxx_API_URL", "http://localhost:5000")
+Maxx_API_URL = os.environ.get("Maxx_API_URL", "https://shopii-api.onrender.com")
 
 def run_check_sync(site_url, card_str, proxy_url=None, timeout=90.0, max_captcha_retries=1):
     """Run one check via the Maxx API. timeout in seconds."""
