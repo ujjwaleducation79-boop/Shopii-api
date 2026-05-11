@@ -1020,29 +1020,44 @@ async def main():
             print(f"❌ An error occurred in main: {e}")
 
 
-async def check_site_fast(site_url, proxy_url=None, max_price=40.0, min_price=10.0):
-    """
-    Fast site check: only GET products.json. Returns dict with ok, price, product, available.
-    Use when adding sites (no full checkout). ~1 request, ~1–2 sec.
-    Finds the LOWEST priced available product (excluding free/very cheap items).
-    """
-    site_url = site_url.strip().rstrip("/")
-    fingerprint = get_random_fingerprint()
-    
-    # More complete headers to avoid blocks
-    product_header = {
-        "User-Agent": fingerprint.get("User-Agent", _FALLBACK_UA),
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Referer": site_url,
-        "Origin": site_url,
-        "DNT": "1",
-        "Connection": "keep-alive",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-    }
+async def check_site_fast(site_url, proxy_url=None, max_price=40.0, min_price=1.0):
+    """Fast site validation using the API server"""
+    try:
+        # Call the local Flask API
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45)) as session:
+            async with session.get(
+                "http://localhost:5000/",
+                params={"site": site_url, "cc": TEST_CCS[0]},
+                ssl=False
+            ) as resp:
+                
+                if resp.status != 200:
+                    return False, f"API Error {resp.status}"
+                
+                data = await resp.json()
+                
+                status = str(data.get("status", "")).lower()
+                message = str(data.get("message", "")).lower()
+                error_code = str(data.get("error_code", "")).lower()
+                
+                # Accept site if we got any clear response from Shopify (even Declined)
+                if status in ["declined", "approved", "charged", "success"] or "declined" in message or "generic_error" in error_code:
+                    # Optional: Check price
+                    try:
+                        price = float(data.get("price", 0))
+                        if price > max_price or price < min_price:
+                            return False, f"Price ${price} out of range"
+                    except:
+                        pass
+                    return True, "Working (Declined/Approved)"
+                
+                elif "site down" in message or "blocked" in message or "error" in status:
+                    return False, data.get("message", "Site not responding")
+                else:
+                    return False, f"Unknown response: {status}"
+                    
+    except Exception as e:
+        return False, f"Connection Error: {str(e)[:80]}"
     
     _proxy_fmt = None
     if proxy_url:
@@ -2003,9 +2018,34 @@ def _print_banner():
     print("="*50)
 
 
-if __name__ == "__main__":
-    _print_banner()
+# ====================== FLASK WEB SERVER (Fixed) ======================
+from flask import Flask, request, jsonify
+import asyncio
+
+app = Flask(__name__)
+
+@app.route('/shopify', methods=['GET'])
+def shopify_check():
+    site = request.args.get('site')
+    cc = request.args.get('cc')
+    
+    if not site or not cc:
+        return jsonify({"status": "error", "message": "Missing site or cc parameter"}), 400
+
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nInterrupted by user, exiting.")
+        # Run the async function
+        result = asyncio.run(run_shopify_check(
+            site_url=site.strip(),
+            card_str=cc.strip(),
+            verbose=False,
+            timeout=60
+        ))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+if __name__ == "__main__":
+    print("🚀 Shopify API Server Started on http://localhost:5000")
+    print("✅ Ready for Telegram Bot connection...")
+    app.run(host="0.0.0.0", port=5000, debug=False)
