@@ -144,20 +144,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 <b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot 🐎""" 
 
-    await update.message.reply_text(welcome_text, parse_mode='HTML')
-    
+    await update.message.reply_text(welcome_text, parse_mode='HTML' 
 
 # ====================== MAIN ======================
 
-async def main():
+if __name__ == "__main__":
     app = Application.builder().token(BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("gen", gen))
     
-    print("✅ Bot is running... (Press Ctrl+C to stop)")
-    await app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    print("✅ Bot is running...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
