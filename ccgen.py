@@ -160,8 +160,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    # This fixes the event loop error in Termux
-    import nest_asyncio
-    nest_asyncio.apply()
-    
     asyncio.run(main())
