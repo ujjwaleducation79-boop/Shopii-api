@@ -145,7 +145,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot 🐎""" 
 
     await update.message.reply_text(welcome_text, parse_mode='HTML') 
-
+    
 # ====================== MAIN ======================
 
 if __name__ == "__main__":
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     
     print("✅ Bot is running...")
     app.run_polling(
-        allowed_updates=Update.ALL_TYPES, 
+        allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,
-        poll_interval=3
+        poll_interval=2
     )
