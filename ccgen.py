@@ -149,15 +149,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ====================== MAIN ======================
 
 if __name__ == "__main__":
-    print("✅ Starting Bot...")
-    
+    print("✅ Starting MaxxGen Bot...")
+
     app = Application.builder().token(BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("gen", gen))
-    
+
     print("✅ Bot is running...")
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
+        drop_pending_updates=True,
+        poll_interval=4
     )
