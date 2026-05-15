@@ -110,7 +110,7 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         output = f"""<b>༺ ᴇɴᴊᴏʏ ᴍᴀxxɢᴇɴ 🐾 ༻</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
 
-✿ ᴄᴄ ɢᴇɴᴇʀᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ ✿
+✿ ᴄᴄ ɢᴇɴᴇʀᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ
 ✿ ʙɪɴ - {bin_part}
 ✿ ᴀᴍᴏᴜɴᴛ - {amount}
 
