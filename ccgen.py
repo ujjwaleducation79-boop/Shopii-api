@@ -2,6 +2,19 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
 import asyncio
+from flask import Flask
+from threading import Thread
+import os
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
 # ====================== PUT YOUR BOT TOKEN HERE ======================
 BOT_TOKEN = "8728683065:AAHtsBfXZJ3OT7vwTezonfjdsvEjX74jFco"   # ←←← Change this
@@ -151,6 +164,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == "__main__":
     print("✅ Starting MaxxGen Bot...")
 
+    Thread(target=run_web).start()
+
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -159,6 +174,6 @@ if __name__ == "__main__":
     print("✅ Bot is running...")
 
     app.run_polling(
-        drop_pending_updates=True,
-        close_loop=False
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
     )
