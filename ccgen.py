@@ -4,7 +4,7 @@ import random
 import asyncio
 
 # ====================== PUT YOUR BOT TOKEN HERE ======================
-BOT_TOKEN = "8728683065:AAHM_iD9niEauR-ARzTuCBotk6jemEfKNqk"   # ←←← Change this
+BOT_TOKEN = "8728683065:AAHtsBfXZJ3OT7vwTezonfjdsvEjX74jFco"   # ←←← Change this
 # =====================================================================
 
 # ====================== HELPERS ======================
