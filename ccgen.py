@@ -264,12 +264,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • <code>/gen</code> - ɢᴇɴᴇʀᴀᴛᴇ ᴄᴀʀᴅs
 • <code>/splittxt</code> - sᴘʟɪᴛ ғɪʟᴇ ɪɴᴛᴏ ᴄʜᴜɴᴋs
 
-<b>⚙ ʜᴏᴡ ᴛᴏ ᴜsᴇ:</b>
+<b>⚙️ ʜᴏᴡ ᴛᴏ ᴜsᴇ:</b>
 • <code>/gen 519603</code>
 • <code>/gen 519603 20</code>
 • <code>/gen 519603|02|29</code>
 • <code>/gen 519603|02|29 15</code>
-• <ᴄᴏᴅᴇ>/splittxt<code> «ᴀᴍᴏᴜɴᴛ» → ʀᴇᴘʟʏ ᴛᴏ ᴀ .ᴛxᴛ ғɪʟᴇ
+• <code>/splittxt<code> → ʀᴇᴘʟʏ ᴛᴏ ᴀ .ᴛxᴛ ғɪʟᴇ ᴡɪᴛʜ ᴀᴍᴏᴜɴᴛ
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 <b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot 🐎"""
