@@ -20,7 +20,7 @@ def run_web():
     app.run(host="0.0.0.0", port=port)
 
 # ====================== PUT YOUR BOT TOKEN HERE ======================
-BOT_TOKEN = "8728683065:AAHtsBfXZJ3OT7vwTezonfjdsvEjX74jFco"   # ←←← Change this
+BOT_TOKEN = "8728683065:AAGOKj9zxYDfv_xSy16UpMjz4gInwpG9WgQ"   # ←←← Change this
 # =====================================================================
 
 # ====================== HELPERS ======================
