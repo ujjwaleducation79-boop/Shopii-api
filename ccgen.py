@@ -6,6 +6,9 @@ from flask import Flask
 from threading import Thread
 import os
 
+# Global Cancel System
+cancel_users = {}
+
 app = Flask(__name__)
 
 @app.route('/')
@@ -17,7 +20,7 @@ def run_web():
     app.run(host="0.0.0.0", port=port)
 
 # ====================== PUT YOUR BOT TOKEN HERE ======================
-BOT_TOKEN = "8728683065:AAHtsBfXZJ3OT7vwTezonfjdsvEjX74jFco"   # ←←← Change this
+BOT_TOKEN = "6721837907:AAENvwTrnsN23joKH6fxJr3ZzMc8A-wPcp0"   # ←←← Change this
 # =====================================================================
 
 # ====================== HELPERS ======================
@@ -74,14 +77,16 @@ def generate_card(bin_prefix: str, month: str = None, year: str = None, cvv: str
 # ====================== /gen COMMAND ======================
 
 async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    user_id = update.effective_user.id
+    cancel_users[user_id] = False   # Initialize cancel flag
+
     try:
-        message = update.message
         user_input = ' '.join(context.args).strip() if context.args else ""
         
         if not user_input:
             await message.reply_text(
                 "✿︎ **ᴜsᴀɢᴇ :**\n"
-                
                 "`/gen 519603`\n"
                 "`/gen 519603 20`\n"
                 "`/gen 519603|02|29`\n"
@@ -103,24 +108,46 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if len(bin_exp) > 2: ano = bin_exp[2]
             if len(bin_exp) > 3: cvv = bin_exp[3]
 
-        # Validation
         if not bin_part or bin_part[0] not in '3456':
             await message.reply_text("✿︎ ʙɪɴ ᴍᴜsᴛ sᴛᴀʀᴛ ᴡɪᴛʜ 3, 4, 5, ᴏʀ 6 ")
             return
 
-        if amount < 1 or amount > 100:
-            await message.reply_text("✿︎ ᴛʀʏ ᴏɴʟʏ 100 ᴄᴄ's ᴀᴛ ᴀ ᴛɪᴍᴇ!")
+        if amount < 1:
+            await message.reply_text("✿︎ ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴀᴛ ʟᴇᴀsᴛ 1")
             return
 
-        if len(bin_part) > 16:
-            await message.reply_text("✿︎ ʙɪɴ ᴛᴏᴏ ʟᴏɴɢ ᴛʀʏ ᴜɴᴅᴇʀ 16!")
+        if amount > 2000:
+            await message.reply_text("✿︎ ᴍᴀxɪᴍᴜᴍ ʟɪᴍɪᴛ ɪs 2000 ᴄᴀʀᴅs!")
             return
+
+        status = await message.reply_text(f"✿︎ ɢᴇɴᴇʀᴀᴛɪɴɢ {amount} ᴄᴄ's... ᴜsᴇ /ᴄᴀɴᴄᴇʟ ᴛᴏ sᴛᴏᴘ ᴛʜᴇ ᴘʀᴏᴄᴇss.", parse_mode='HTML')
 
         # Generate cards
-        cards_list = [generate_card(bin_part, mes, ano, cvv) for _ in range(amount)]
+        cards_list = []
+        for i in range(amount):
+            if cancel_users.get(user_id, False):
+                await status.edit_text("❌ **ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**")
+                cancel_users.pop(user_id, None)
+                return
+            cards_list.append(generate_card(bin_part, mes, ano, cvv))
+
         cards_text = "\n".join(cards_list)
 
-        output = f"""<b>༺ ᴇɴᴊᴏʏ ᴍᴀxxɢᴇɴ 🐾 ༻</b>
+        # Send as TXT if more than 50
+        if amount > 50:
+            import io
+            buf = io.BytesIO(cards_text.encode("utf-8"))
+            buf.name = f"cc_gen_{bin_part}_{amount}.txt"
+            
+            await message.reply_document(
+                document=buf,
+                caption=f"✿ ᴄᴄ's ɢᴇɴᴇʀᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ\n"
+                        f"✿ ʙɪɴ - {bin_part}\n"
+                        f"✿ ᴛᴏᴛᴀʟ ᴀᴍᴏᴜɴᴛ - {amount}\n",
+                parse_mode='HTML'
+            )
+        else:
+            output = f"""<b>༺ ᴇɴᴊᴏʏ ᴍᴀxxɢᴇɴ 🐾 ༻</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 ✿ ᴄᴄ ɢᴇɴᴇʀᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ
@@ -131,11 +158,97 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ✿ <b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot"""
 
-        await message.reply_text(output, parse_mode='HTML')
+            await message.reply_text(output, parse_mode='HTML')
 
     except Exception as e:
-        await message.reply_text(f"✿︎ Error: {str(e)}")
+        await message.reply_text(f"✿︎ ᴇʀʀᴏʀ: {str(e)}")
+    finally:
+        cancel_users.pop(user_id, None)   # Clean up
 
+# ====================== /cancel COMMAND ======================
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in cancel_users:
+        cancel_users[user_id] = True
+        await update.message.reply_text("❌ **ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**", parse_mode='HTML')
+    else:
+        await update.message.reply_text("✅ ɴᴏ ᴀᴄᴛɪᴠᴇ ᴘʀᴏᴄᴇss ᴛᴏ ᴄᴀɴᴄᴇʟ.", parse_mode='HTML')
+    
+async def splittxt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    cid = message.chat.id
+    user_id = update.effective_user.id
+    
+    text = ' '.join(context.args).strip() if context.args else ""
+    try:
+        chunk_size = int(text) if text else 500
+    except:
+        chunk_size = 500
+
+    if chunk_size < 1:
+        await message.reply_text("❌ ᴄʜᴜɴᴋ sɪᴢᴇ ᴍᴜsᴛ ʙᴇ ᴀᴛʟᴇᴀsᴛ 1.", parse_mode='HTML')
+        return
+
+    reply = message.reply_to_message
+    if not reply or not reply.document:
+        await message.reply_text("⚠️ ʀᴇᴘʟʏ ᴛᴏ ᴀ <b>.ᴛxᴛ ғɪʟᴇ</b> ᴡɪᴛʜ ᴛʜɪs ᴄᴍᴅ.", parse_mode='HTML')
+        return
+
+    # Initialize cancel flag
+    cancel_users[user_id] = False
+
+    status = await message.reply_text("⏳ ᴘʀᴏᴄᴇssɪɴɢ ʏᴏᴜʀ ғɪʟᴇ...", parse_mode='HTML')
+
+    try:
+        file_id = reply.document.file_id
+        file = await context.bot.get_file(file_id)
+        data = await file.download_as_bytearray()
+        
+        try:
+            file_text = data.decode("utf-8", errors="ignore")
+        except:
+            file_text = data.decode("latin-1", errors="ignore")
+
+        all_lines = [line.strip() for line in file_text.splitlines() if line.strip()]
+        total = len(all_lines)
+
+        if total == 0:
+            await status.edit_text("❌ ғɪʟᴇ ɪs ᴇᴍᴘᴛʏ.")
+            return
+
+        num_chunks = (total + chunk_size - 1) // chunk_size
+
+        await status.edit_text(f"✂️ sᴘʟɪᴛᴛɪɴɢ <b>{total}</b> ʟɪɴᴇs...\nᴜsᴇ /ᴄᴀɴᴄᴇʟ ᴛᴏ sᴛᴏᴘ ᴛʜᴇ ᴘʀᴏᴄᴇss.", parse_mode='HTML')
+
+        import io
+        import asyncio
+
+        for i in range(num_chunks):
+            if cancel_users.get(user_id, False):
+                await status.edit_text("🛑 **ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**")
+                cancel_users.pop(user_id, None)
+                return
+
+            start = i * chunk_size
+            end = min(start + chunk_size, total)
+            chunk_lines = all_lines[start:end]
+            chunk_text = "\n".join(chunk_lines)
+            
+            buf = io.BytesIO(chunk_text.encode("utf-8"))
+            buf.name = f"cards_part{i+1}_of_{num_chunks}.txt"
+            
+            await context.bot.send_document(cid, buf, caption=f"📄 ᴘᴀʀᴛ {i+1}/{num_chunks} — {len(chunk_lines)} ᴄᴀʀᴅs")
+            
+            if num_chunks > 3:
+                await asyncio.sleep(0.4)
+
+        await status.edit_text(f"✅ sᴜᴄᴄᴇssғᴜʟʟʏ sᴘʟɪᴛᴇᴅ <b>{total}</b> ᴄᴀʀᴅs ɪɴᴛᴏ <b>{num_chunks}</b> ғɪʟᴇs.", parse_mode='HTML')
+
+    except Exception as e:
+        await status.edit_text(f"❌ ᴇʀʀᴏʀ: {str(e)[:150]}")
+    finally:
+        cancel_users.pop(user_id, None)   # Clean up properly
 
 # ====================== /start COMMAND ======================
 
@@ -146,34 +259,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>✿︎ ᴍᴀxxɢᴇɴ ɢᴇɴᴇʀᴀᴛᴇs ʟᴜʜɴ-ᴠᴀʟɪᴅ ᴄᴀʀᴅs </b>
 
 <b>📌 ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴏᴍᴍᴀɴᴅs:</b>
-• /gen - ɢᴇɴᴇʀᴀᴛᴇ ᴄᴀʀᴅs
+
+• <code>/gen<code> - ɢᴇɴᴇʀᴀᴛᴇ ᴄᴀʀᴅs 
+• <code>/splittxt<code> {ᴀᴍᴏᴜɴᴛ} - sᴘʟɪᴛ ғɪʟᴇ ɪɴᴛᴏ ᴄʜᴜɴᴋs
 
 <b>⚙ ʜᴏᴡ ᴛᴏ ᴜsᴇ:</b>
 • <code>/gen 519603</code> → ɢᴇɴᴇʀᴀᴛᴇ ᴄᴀʀᴅs
 • <code>/gen 519603 20</code> → ɢᴇɴᴇʀᴀᴛᴇ 20 ᴄᴀʀᴅs
 • <code>/gen 519603|02|29</code> → ᴡɪᴛʜ ᴇxᴘɪʀʏ
 • <code>/gen 519603|02|29 15</code> → ᴡɪᴛʜ ᴇxᴘɪʀʏ + ᴀᴍᴏᴜɴᴛ
+• <ᴄᴏᴅᴇ>/splittxt<code> {ᴀᴍᴏᴜɴᴛ} → ʀᴇᴘʟʏ ᴛᴏ ᴀ .ᴛxᴛ ғɪʟᴇ
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 <b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot 🐎""" 
 
     await update.message.reply_text(welcome_text, parse_mode='HTML') 
     
-# ====================== MAIN ======================
+    
+# ====================== MAIN FOR RENDER ======================
 
 if __name__ == "__main__":
     print("✅ Starting MaxxGen Bot...")
 
-    Thread(target=run_web).start()
-
     app = Application.builder().token(BOT_TOKEN).build()
-
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("gen", gen))
-
-    print("✅ Bot is running...")
-
+    app.add_handler(CommandHandler("splittxt", splittxt))
+    app.add_handler(CommandHandler("cancel", cancel))
+    
+    print("✅ Bot is running... (Render Mode)")
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
+        drop_pending_updates=True,
+        poll_interval=3
+        )
