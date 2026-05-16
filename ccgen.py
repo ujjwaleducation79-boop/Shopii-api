@@ -269,7 +269,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • <code>/gen 519603 20</code>
 • <code>/gen 519603|02|29</code>
 • <code>/gen 519603|02|29 15</code>
-• <code>/splittxt<code> → ʀᴇᴘʟʏ ᴛᴏ ᴀ .ᴛxᴛ ғɪʟᴇ ᴡɪᴛʜ ᴀᴍᴏᴜɴᴛ
+• <code>/splittxt</code> → ʀᴇᴘʟʏ ᴛᴏ ᴀ .ᴛxᴛ ғɪʟᴇ ᴡɪᴛʜ ᴀᴍᴏᴜɴᴛ
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 <b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot 🐎"""
