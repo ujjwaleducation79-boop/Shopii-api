@@ -19,6 +19,8 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
+Thread(target=run_web).start()
+
 # ====================== PUT YOUR BOT TOKEN HERE ======================
 BOT_TOKEN = "8728683065:AAGOKj9zxYDfv_xSy16UpMjz4gInwpG9WgQ"   # ←←← Change this
 # =====================================================================
@@ -276,10 +278,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_text, parse_mode='HTML') 
     
     
-# ====================== MAIN FOR RENDER ======================
-
 if __name__ == "__main__":
     print("✅ Starting MaxxGen Bot...")
+
+    Thread(target=run_web).start()
 
     app = Application.builder().token(BOT_TOKEN).build()
     
@@ -289,8 +291,9 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("cancel", cancel))
     
     print("✅ Bot is running... (Render Mode)")
+    
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,
         poll_interval=3
-        )
+    )
