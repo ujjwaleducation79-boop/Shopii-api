@@ -128,7 +128,7 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cards_list = []
         for i in range(amount):
             if cancel_users.get(user_id, False):
-                await status.edit_text("❌ **ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**")
+                await status.edit_text("🛑 **ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**")
                 cancel_users.pop(user_id, None)
                 return
             cards_list.append(generate_card(bin_part, mes, ano, cvv))
@@ -173,7 +173,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in cancel_users:
         cancel_users[user_id] = True
-        await update.message.reply_text("❌ **ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**", parse_mode='HTML')
+        await update.message.reply_text("🛑 **ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!**", parse_mode='HTML')
     else:
         await update.message.reply_text("✅ ɴᴏ ᴀᴄᴛɪᴠᴇ ᴘʀᴏᴄᴇss ᴛᴏ ᴄᴀɴᴄᴇʟ.", parse_mode='HTML')
     
@@ -258,25 +258,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = """<b>༺ ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍᴀxxɢᴇɴ 🐾 ༻</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
 
-<b>✿︎ ᴍᴀxxɢᴇɴ ɢᴇɴᴇʀᴀᴛᴇs ʟᴜʜɴ-ᴠᴀʟɪᴅ ᴄᴀʀᴅs </b>
+<b>✿︎ ᴍᴀxxɢᴇɴ ɢᴇɴᴇʀᴀᴛᴇs ʟᴜʜɴ-ᴠᴀʟɪᴅ ᴄᴀʀᴅs</b>
 
 <b>📌 ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴏᴍᴍᴀɴᴅs:</b>
-
-• <code>/gen<code> - ɢᴇɴᴇʀᴀᴛᴇ ᴄᴀʀᴅs 
-• <code>/splittxt<code> {ᴀᴍᴏᴜɴᴛ} - sᴘʟɪᴛ ғɪʟᴇ ɪɴᴛᴏ ᴄʜᴜɴᴋs
+• <code>/gen</code> - ɢᴇɴᴇʀᴀᴛᴇ ᴄᴀʀᴅs
+• <code>/splittxt</code> - sᴘʟɪᴛ ғɪʟᴇ ɪɴᴛᴏ ᴄʜᴜɴᴋs
 
 <b>⚙ ʜᴏᴡ ᴛᴏ ᴜsᴇ:</b>
-• <code>/gen 519603</code> → ɢᴇɴᴇʀᴀᴛᴇ ᴄᴀʀᴅs
-• <code>/gen 519603 20</code> → ɢᴇɴᴇʀᴀᴛᴇ 20 ᴄᴀʀᴅs
-• <code>/gen 519603|02|29</code> → ᴡɪᴛʜ ᴇxᴘɪʀʏ
-• <code>/gen 519603|02|29 15</code> → ᴡɪᴛʜ ᴇxᴘɪʀʏ + ᴀᴍᴏᴜɴᴛ
-• <ᴄᴏᴅᴇ>/splittxt<code> {ᴀᴍᴏᴜɴᴛ} → ʀᴇᴘʟʏ ᴛᴏ ᴀ .ᴛxᴛ ғɪʟᴇ
+• <code>/gen 519603</code>
+• <code>/gen 519603 20</code>
+• <code>/gen 519603|02|29</code>
+• <code>/gen 519603|02|29 15</code>
+• <ᴄᴏᴅᴇ>/splittxt<code> «ᴀᴍᴏᴜɴᴛ» → ʀᴇᴘʟʏ ᴛᴏ ᴀ .ᴛxᴛ ғɪʟᴇ
 
 ━━━━━━━━━━━━━━━━━━━━━━━
-<b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot 🐎""" 
+<b>ғʀᴇᴇ ᴄʜᴇᴄᴋᴇʀ:</b> @MaxxCHECKERbot 🐎"""
 
-    await update.message.reply_text(welcome_text, parse_mode='HTML') 
-    
+    await update.message.reply_text(welcome_text, parse_mode='HTML')
     
 if __name__ == "__main__":
     print("✅ Starting MaxxGen Bot...")
