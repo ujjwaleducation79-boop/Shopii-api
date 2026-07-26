@@ -272,9 +272,9 @@ async def fetch_products(domain, proxy_str=None):
                 
                     html = await resp.text()
                     handles = set()
-                    handles.update(re.findall(r'href=["\']?/products/([a-zA-Z0-9\-_]+)', html))
-                    handles.update(re.findall(r'data-product-handle=["\']?([a-zA-Z0-9\-_]+)', html))
-                    handles.update(re.findall(r'"handle":"([a-zA-Z0-9\-_]+)"', html))
+                    handles.update(re.findall(r"href=['\"]?/products/([a-zA-Z0-9_-]+)", html))
+                    handles.update(re.findall(r"data-product-handle=['\"]?([a-zA-Z0-9_-]+)", html))
+                    handles.update(re.findall(r'"handle":"([a-zA-Z0-9_-]+)"', html))
                     
             
 
