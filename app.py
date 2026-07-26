@@ -209,29 +209,37 @@ def is_captcha_required(response_text):
 def extract_clean_response(message):
     if not message:
         return "UNKNOWN_ERROR"
+
     message = str(message)
+
     patterns = [
-    r"(PAYMENTS_[A-Z_]+)",
-    r"(CARD_[A-Z_]+)",
-    r"([A-Z]+_[A-Z]+_[A-Z_]+)",
-    r"([A-Z]+_[A-Z_]+)",
-    r"code[\"']?\s*[:=]\s*[\"']?([^\"',]+)[\"']?",
-    r'{"code":"([^"]+)"}',
-    r"'code':'([^']+)'"
+        r"(PAYMENTS_[A-Z_]+)",
+        r"(CARD_[A-Z_]+)",
+        r"([A-Z]+_[A-Z]+_[A-Z_]+)",
+        r"([A-Z]+_[A-Z_]+)",
+        r'code["\']?\s*[:=]\s*["\']?([^"\',\s}]+)',
+        r'{"code":"([^"]+)"}',
+        r"'code':'([^']+)'"
     ]
+
     for pattern in patterns:
         matches = re.findall(pattern, message, re.IGNORECASE)
+
         for match in matches:
             if isinstance(match, tuple):
                 match = match[0]
+
+            match = match.strip("{}:'\" ")
+
             if match and "_" in match and len(match) < 50:
-                match = match.strip("{}:'" ")
                 return match
+
     words = message.split()
     if words:
         first_word = words[0]
         if "_" in first_word and first_word.isupper():
             return first_word
+
     return message[:50]
 
 
