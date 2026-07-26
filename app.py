@@ -269,11 +269,14 @@ async def fetch_products(domain, proxy_str=None):
         try:
             async with session.get(domain, proxy=proxy, headers=headers) as resp:
                 if resp.status == 200:
+                
                     html = await resp.text()
                     handles = set()
-                    handles.update(re.findall(r'href=["']?/products/([a-zA-Z0-9\-_]+)', html))
-                    handles.update(re.findall(r'data-product-handle=["']?([a-zA-Z0-9\-_]+)', html))
+                    handles.update(re.findall(r'href=["\']?/products/([a-zA-Z0-9\-_]+)', html))
+                    handles.update(re.findall(r'data-product-handle=["\']?([a-zA-Z0-9\-_]+)', html))
                     handles.update(re.findall(r'"handle":"([a-zA-Z0-9\-_]+)"', html))
+                    
+            
 
                     for handle in list(handles)[:8]:
                         # Try product JSON
