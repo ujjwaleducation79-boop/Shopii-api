@@ -299,7 +299,11 @@ async def fetch_products(domain, proxy_str=None):
                                 if p_resp.status == 200:
                                     p_html = await p_resp.text()
 
-                                    m = re.search(r"name=["']?id["']?\s+value=["']?(\d+)["']?", p_html)
+                                    m = re.search(
+                                      r'<input[^>]*name=["\']id["\'][^>]*value=["\']?(\d+)["\']?',
+                                      p_html,
+                                      re.IGNORECASE,
+                                    )
                                     if m:
                                         return {'variant_id': m.group(1), 'price': '0.00'}
 
