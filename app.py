@@ -337,7 +337,7 @@ async def fetch_products(domain, proxy_str=None):
                                     if m:
                                         return {'variant_id': m.group(1), 'price': '0.00'}
 
-                                    m = re.search(r'(?:variant|id)["']?\s*[:=]\s*["']?(\d{10,20})["']?', p_html, re.IGNORECASE)
+                                    m = re.search(r"(?:variant|id)[\"']?\s*[:=]\s*[\"']?(\d{10,20})[\"']?", p_html, re.IGNORECASE)
                                     if m:
                                         return {'variant_id': m.group(1), 'price': '0.00'}
                         except Exception:
