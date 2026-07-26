@@ -211,8 +211,13 @@ def extract_clean_response(message):
         return "UNKNOWN_ERROR"
     message = str(message)
     patterns = [
-        r'(PAYMENTS_[A-Z_]+)', r'(CARD_[A-Z_]+)', r'([A-Z]+_[A-Z]+_[A-Z_]+)', r'([A-Z]+_[A-Z_]+)',
-        r'code["']?\s*[:=]\s*["']?([^"',]+)["']?', r'{"code":"([^"]+)"', r"'code':'([^']+)'"
+    r"(PAYMENTS_[A-Z_]+)",
+    r"(CARD_[A-Z_]+)",
+    r"([A-Z]+_[A-Z]+_[A-Z_]+)",
+    r"([A-Z]+_[A-Z_]+)",
+    r"code[\"']?\s*[:=]\s*[\"']?([^\"',]+)[\"']?",
+    r'{"code":"([^"]+)"}',
+    r"'code':'([^']+)'"
     ]
     for pattern in patterns:
         matches = re.findall(pattern, message, re.IGNORECASE)
