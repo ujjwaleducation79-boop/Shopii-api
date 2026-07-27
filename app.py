@@ -55,8 +55,7 @@ book = {
 def parse_proxy(proxy_str):
     if not proxy_str:
         return None
-    # Already full URL
-    if proxy_str.startswith("http://") or proxy_str.startswith("https://") or proxy_str.startswith("socks5://"):
+    if proxy_str.startswith(("http://", "https://", "socks5://")):
         return proxy_str
     parts = proxy_str.split(':')
     if len(parts) == 2:
@@ -65,6 +64,76 @@ def parse_proxy(proxy_str):
         host, port, user, pwd = parts
         return f"http://{user}:{pwd}@{host}:{port}"
     return None
+
+async def fetch_products(domain, proxy_str=None, max_retries=5):
+    if not domain.startswith('http'):
+        domain = "https://" + domain
+
+    proxy_url = parse_proxy(proxy_str) if proxy_str else None
+    endpoints = [
+        f"{domain}/products.json?limit=250",
+        f"{domain}/collections/all/products.json?limit=250",
+        f"{domain}/products.json?limit=50",
+    ]
+    last_error = "FETCH_FAILED"
+
+    for attempt in range(max_retries):
+        for endpoint in endpoints:
+            try:
+                headers = get_random_browser_headers(domain)
+                headers.update({
+                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                })
+
+                timeout = aiohttp.ClientTimeout(total=25)
+                connector = aiohttp.TCPConnector(ssl=False, limit=10)
+
+                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                    async with session.get(endpoint, proxy=proxy_url, headers=headers, ssl=False) as resp:
+                        if resp.status != 200:
+                            last_error = f"HTTP_{resp.status}"
+                            continue
+
+                        text = await resp.text()
+                        if not text or not text.strip().startswith('{'):
+                            last_error = "INVALID_RESPONSE"
+                            continue
+
+                        data = json.loads(text)
+                        products = data.get('products', [])
+
+                        if not products:
+                            last_error = "NO_PRODUCTS"
+                            continue
+
+                        for p in products:
+                            for v in p.get('variants', []):
+                                if v.get('available', False):
+                                    return {
+                                        'variant_id': str(v['id']),
+                                        'price': str(v.get('price', '0.00'))
+                                    }
+
+                        last_error = "NO_AVAILABLE_PRODUCTS"
+
+            except aiohttp.ClientProxyConnectionError:
+                return False, "PROXY_ERROR"
+            except aiohttp.ClientHttpProxyError:
+                return False, "PROXY_ERROR"
+            except asyncio.TimeoutError:
+                last_error = "TIMEOUT"
+            except Exception as e:
+                err = str(e).lower()
+                if proxy_url and ('proxy' in err or 'tunnel' in err or 'connection' in err or 'ssl' in err):
+                    return False, "PROXY_ERROR"
+                last_error = "FETCH_FAILED"
+
+        await asyncio.sleep(1.5)
+
+    return False, last_error
+
 
 def get_random_browser_headers(origin_url):
     browsers = [
@@ -245,38 +314,6 @@ async def make_graphql_request(session, graphql_url, params, headers, json_data,
             await asyncio.sleep(random.uniform(2.0, 4.0))
     return None, "Unknown error", False
 
-async def fetch_products(domain, proxy_url=None, max_retries=3):
-    if not domain.startswith('http'):
-        domain = "https://" + domain
-    for attempt in range(max_retries):
-        try:
-            headers = get_random_browser_headers(domain)
-            headers.update({
-                'Accept': 'application/json, text/plain, */*',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            })
-            timeout = aiohttp.ClientTimeout(total=20)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"{domain}/products.json?limit=50", proxy=proxy_url, headers=headers, ssl=False) as resp:
-                    if resp.status != 200:
-                        await asyncio.sleep(1)
-                        continue
-                    text = await resp.text()
-                    if not text.strip().startswith('{'):
-                        continue
-                    data = json.loads(text)
-                    products = data.get('products', [])
-                    for p in products:
-                        for v in p.get('variants', []):
-                            if v.get('available', False):
-                                return {
-                                    'variant_id': str(v['id']),
-                                    'price': str(v.get('price', '0.00'))
-                                }
-                    return None, "NO_AVAILABLE_PRODUCTS"
-        except Exception:
-            await asyncio.sleep(1.5)
-    return None, "FETCH_FAILED"
 
 # ==================== BIN INFO ====================
 async def get_bin_info(cc_number):
