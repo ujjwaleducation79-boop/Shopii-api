@@ -65,48 +65,47 @@ def parse_proxy(proxy_str):
         return f"http://{user}:{pwd}@{host}:{port}"
     return None
 
-async def fetch_products(domain, proxy_str=None, max_retries=5):
+async def fetch_products(domain, proxy_str=None, max_retries=3):
     if not domain.startswith('http'):
         domain = "https://" + domain
 
     proxy_url = parse_proxy(proxy_str) if proxy_str else None
+    base_headers = get_random_browser_headers(domain)
+
+    # ── Attempt 1: JSON endpoints with 429 backoff ──
     endpoints = [
         f"{domain}/products.json?limit=250",
         f"{domain}/collections/all/products.json?limit=250",
         f"{domain}/products.json?limit=50",
     ]
-    last_error = "FETCH_FAILED"
 
     for attempt in range(max_retries):
         for endpoint in endpoints:
             try:
-                headers = get_random_browser_headers(domain)
-                headers.update({
+                req_headers = {
+                    **base_headers,
                     'Accept': 'application/json, text/plain, */*',
                     'Accept-Encoding': 'gzip, deflate, br',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-                })
+                }
 
-                timeout = aiohttp.ClientTimeout(total=25)
-                connector = aiohttp.TCPConnector(ssl=False, limit=10)
+                timeout = aiohttp.ClientTimeout(total=20)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(endpoint, proxy=proxy_url, headers=req_headers, ssl=False) as resp:
+                        if resp.status == 429:
+                            # Exponential backoff + jitter, then retry next attempt
+                            await asyncio.sleep((attempt + 1) * 2 + random.uniform(0, 2))
+                            break  # break endpoint loop, go to next attempt
 
-                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-                    async with session.get(endpoint, proxy=proxy_url, headers=headers, ssl=False) as resp:
                         if resp.status != 200:
-                            last_error = f"HTTP_{resp.status}"
                             continue
 
                         text = await resp.text()
                         if not text or not text.strip().startswith('{'):
-                            last_error = "INVALID_RESPONSE"
                             continue
 
                         data = json.loads(text)
                         products = data.get('products', [])
-
-                        if not products:
-                            last_error = "NO_PRODUCTS"
-                            continue
 
                         for p in products:
                             for v in p.get('variants', []):
@@ -115,24 +114,98 @@ async def fetch_products(domain, proxy_str=None, max_retries=5):
                                         'variant_id': str(v['id']),
                                         'price': str(v.get('price', '0.00'))
                                     }
-
-                        last_error = "NO_AVAILABLE_PRODUCTS"
+                        return False, "NO_AVAILABLE_PRODUCTS"
 
             except aiohttp.ClientProxyConnectionError:
                 return False, "PROXY_ERROR"
             except aiohttp.ClientHttpProxyError:
                 return False, "PROXY_ERROR"
             except asyncio.TimeoutError:
-                last_error = "TIMEOUT"
+                continue
             except Exception as e:
                 err = str(e).lower()
-                if proxy_url and ('proxy' in err or 'tunnel' in err or 'connection' in err or 'ssl' in err):
+                if proxy_url and any(x in err for x in ['proxy', 'tunnel', 'connection', 'ssl']):
                     return False, "PROXY_ERROR"
-                last_error = "FETCH_FAILED"
 
-        await asyncio.sleep(1.5)
+    # ── Attempt 2: HTML Scraping Fallback (bypasses JSON blocks) ──
+    try:
+        html_headers = {
+            **base_headers,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+        }
 
-    return False, last_error
+        timeout = aiohttp.ClientTimeout(total=20)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(domain, proxy=proxy_url, headers=html_headers, ssl=False) as resp:
+                if resp.status == 429:
+                    return False, "HTTP_429"
+                if resp.status != 200:
+                    return False, f"HTTP_{resp.status}"
+
+                html = await resp.text()
+
+                # Extract variant IDs embedded in Shopify theme JS/HTML
+                variant_patterns = [
+                    r'"variantId":(\d+)',
+                    r'"variantId&quot;:&quot;(\d+)&quot;',
+                    r'"variantId\\":\\"(\d+)\\"',
+                    r'data-variant-id="(\d+)"',
+                    r'value="(\d+)"[^>]*data-variant',
+                    r'"id":(\d+),"title":"[^"]*","option',
+                    r'\\"id\\":(\d+),\\"title\\"',
+                    r'"variants":\[\{"id":(\d+)',
+                ]
+
+                for pattern in variant_patterns:
+                    matches = re.findall(pattern, html)
+                    for match in matches:
+                        if match and len(str(match)) > 5:
+                            return {
+                                'variant_id': str(match),
+                                'price': '0.00'
+                            }
+
+                # Try to grab a product handle and hit its individual JSON
+                handle_match = re.search(r'href="/products/([^"\s?]+)', html)
+                if handle_match:
+                    handle = handle_match.group(1)
+                    product_json_url = f"{domain}/products/{handle}.json"
+                    async with session.get(product_json_url, proxy=proxy_url, headers=req_headers, ssl=False) as p_resp:
+                        if p_resp.status == 200:
+                            p_text = await p_resp.text()
+                            if p_text.strip().startswith('{'):
+                                p_data = json.loads(p_text)
+                                product = p_data.get('product', {})
+                                for v in product.get('variants', []):
+                                    if v.get('available', False):
+                                        return {
+                                            'variant_id': str(v['id']),
+                                            'price': str(v.get('price', '0.00'))
+                                        }
+
+                return False, "NO_VARIANTS_FOUND"
+
+    except aiohttp.ClientProxyConnectionError:
+        return False, "PROXY_ERROR"
+    except aiohttp.ClientHttpProxyError:
+        return False, "PROXY_ERROR"
+    except asyncio.TimeoutError:
+        return False, "TIMEOUT"
+    except Exception as e:
+        err = str(e).lower()
+        if proxy_url and any(x in err for x in ['proxy', 'tunnel', 'connection', 'ssl']):
+            return False, "PROXY_ERROR"
+        return False, "FETCH_FAILED"
+
+    return False, "HTTP_429"
+    
+
 
 
 def get_random_browser_headers(origin_url):
