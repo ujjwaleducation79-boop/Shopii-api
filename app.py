@@ -65,88 +65,142 @@ def parse_proxy(proxy_str):
         return f"http://{user}:{pwd}@{host}:{port}"
     return None
 
-async def fetch_products(domain, proxy_str=None, max_retries=3):
+async def fetch_products(domain, proxy_str=None):
     if not domain.startswith('http'):
         domain = "https://" + domain
 
     proxy_url = parse_proxy(proxy_str) if proxy_str else None
 
+    # Real browser navigation headers
+    nav_headers = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'max-age=0',
+        'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'none',
+        'sec-fetch-user': '?1',
+        'upgrade-insecure-requests': '1',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    }
+
+    timeout = aiohttp.ClientTimeout(total=30)
+    connector = aiohttp.TCPConnector(ssl=False, limit=5)
+
     # ═══════════════════════════════════════════════════════
-    # STRATEGY 1: HTML Scraping (avoids Shopify .json blocks)
+    # Use ONE session so cookies persist across requests
     # ═══════════════════════════════════════════════════════
-    try:
-        base_headers = get_random_browser_headers(domain)
-        nav_headers = {
-            **base_headers,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'max-age=0',
-            'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-        }
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
 
-        timeout = aiohttp.ClientTimeout(total=25)
-        connector = aiohttp.TCPConnector(ssl=False, limit=10)
+        # ── METHOD 0: Warm up cookies on homepage ──
+        try:
+            async with session.get(domain, proxy=proxy_url, headers=nav_headers, ssl=False) as warm:
+                if warm.status in (429, 403, 503):
+                    # Proxy is burned on this store entirely
+                    return False, "PROXY_BANNED"
+                home_html = await warm.text()
+        except aiohttp.ClientProxyConnectionError:
+            return False, "PROXY_ERROR"
+        except aiohttp.ClientHttpProxyError:
+            return False, "PROXY_ERROR"
+        except Exception as e:
+            err = str(e).lower()
+            if proxy_url and any(x in err for x in ['proxy', 'tunnel', 'connection', 'ssl']):
+                return False, "PROXY_ERROR"
+            home_html = ""
 
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            # ── Step 1: Grab homepage for product handles ──
-            async with session.get(domain, proxy=proxy_url, headers=nav_headers, ssl=False) as resp:
-                if resp.status in (429, 403, 503):
-                    html = ""
-                else:
-                    html = await resp.text()
+        # ── METHOD 1: Extract handles from homepage ──
+        handles = []
+        for h in re.findall(r'href="[^"]*/products/([^"\s?]+)"', home_html):
+            if h not in handles and not h.startswith('http') and "'" not in h:
+                handles.append(h)
 
-                # Password page check
-                if 'storefront-password-form' in html or ('Enter store' in html and 'password' in html.lower()):
-                    return False, "PASSWORD_PROTECTED"
-
-                # Extract handles
-                handles = []
-                for h in re.findall(r'href="[^"]*/products/([^"\s?]+)"', html):
-                    if h not in handles and not h.startswith('http'):
-                        handles.append(h)
-
-            # ── Step 2: Try /collections/all if homepage empty ──
-            if not handles:
-                await asyncio.sleep(random.uniform(0.5, 1.0))
-                async with session.get(
-                    f"{domain}/collections/all",
-                    proxy=proxy_url,
-                    headers={**nav_headers, 'Referer': domain, 'sec-fetch-site': 'same-origin'},
-                    ssl=False
-                ) as c_resp:
+        # ── METHOD 2: Collection /all page ──
+        if not handles:
+            try:
+                await asyncio.sleep(random.uniform(0.8, 1.5))
+                c_headers = {**nav_headers, 'Referer': domain, 'sec-fetch-site': 'same-origin'}
+                async with session.get(f"{domain}/collections/all", proxy=proxy_url, headers=c_headers, ssl=False) as c_resp:
                     if c_resp.status == 200:
                         c_html = await c_resp.text()
                         for h in re.findall(r'href="[^"]*/products/([^"\s?]+)"', c_html):
-                            if h not in handles and not h.startswith('http'):
+                            if h not in handles and not h.startswith('http') and "'" not in h:
                                 handles.append(h)
+            except Exception:
+                pass
 
-            # ── Step 3: Visit product pages, extract variant JSON from theme ──
-            for idx, handle in enumerate(handles[:10]):
-                if idx > 0:
-                    await asyncio.sleep(random.uniform(1.0, 2.5))
+        # ── METHOD 3: Search Suggest API (often unprotected) ──
+        if not handles:
+            try:
+                await asyncio.sleep(random.uniform(0.5, 1.0))
+                s_headers = {
+                    **nav_headers,
+                    'Accept': 'application/json, text/javascript, */*; q=0.01',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Referer': domain,
+                    'sec-fetch-site': 'same-origin',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-dest': 'empty',
+                }
+                search_url = f"{domain}/search/suggest.json?q=a&resources[type]=product&resources[limit]=20&resources[options[fields]]=title,product_type,variants.title"
+                async with session.get(search_url, proxy=proxy_url, headers=s_headers, ssl=False) as s_resp:
+                    if s_resp.status == 200:
+                        s_data = await s_resp.json(content_type=None)
+                        resources = s_data.get('resources', {}).get('results', {})
+                        for product in resources.get('products', []):
+                            handle = product.get('handle')
+                            if handle and handle not in handles:
+                                handles.append(handle)
+                            # Some suggest APIs return variants directly
+                            for v in product.get('variants', []):
+                                vid = v.get('id')
+                                if vid:
+                                    price = v.get('price', '0.00')
+                                    if isinstance(price, int):
+                                        price = str(price / 100.0)
+                                    return {'variant_id': str(vid), 'price': str(price)}
+            except Exception:
+                pass
 
-                product_url = f"{domain}/products/{handle}"
+        # ── METHOD 4: Sitemap.xml ──
+        if not handles:
+            try:
+                await asyncio.sleep(random.uniform(0.5, 1.0))
+                async with session.get(f"{domain}/sitemap.xml", proxy=proxy_url, headers=nav_headers, ssl=False) as sm:
+                    if sm.status == 200:
+                        sm_text = await sm.text()
+                        urls = re.findall(r'<loc>([^<]+)</loc>', sm_text)
+                        for u in urls:
+                            if '/products/' in u and '/collections/' not in u and '/pages/' not in u:
+                                h = u.split('/products/')[-1].split('.')[0].split('?')[0]
+                                if h and h not in handles:
+                                    handles.append(h)
+            except Exception:
+                pass
+
+        # ── METHOD 5: Deep scrape product pages for variant IDs ──
+        for idx, handle in enumerate(handles[:12]):
+            if idx > 0:
+                await asyncio.sleep(random.uniform(1.5, 3.0))
+
+            try:
+                p_url = f"{domain}/products/{handle}"
                 p_headers = {
                     **nav_headers,
-                    'Referer': domain,
+                    'Referer': f"{domain}/collections/all",
                     'sec-fetch-site': 'same-origin',
                 }
 
-                async with session.get(product_url, proxy=proxy_url, headers=p_headers, ssl=False) as p_resp:
+                async with session.get(p_url, proxy=proxy_url, headers=p_headers, ssl=False) as p_resp:
                     if p_resp.status != 200:
                         continue
-
                     p_html = await p_resp.text()
 
-                    # Method A: <script type="application/json" id="ProductJson-...">
+                    # 5a: ProductJson-* script blocks
                     scripts = re.findall(
                         r'<script[^>]*type=["\']application/json["\'][^>]*(?:id=["\']ProductJson-[^"\']*["\'])?[^>]*>(.*?)</script>',
                         p_html, re.DOTALL | re.IGNORECASE
@@ -161,14 +215,11 @@ async def fetch_products(domain, proxy_str=None, max_retries=3):
                                         price = v.get('price', '0.00')
                                         if isinstance(price, int):
                                             price = str(price / 100.0)
-                                        return {
-                                            'variant_id': str(v['id']),
-                                            'price': str(price)
-                                        }
+                                        return {'variant_id': str(v['id']), 'price': str(price)}
                         except Exception:
                             continue
 
-                    # Method B: window.ShopifyAnalytics.meta
+                    # 5b: window.ShopifyAnalytics.meta
                     meta_match = re.search(
                         r'window\.ShopifyAnalytics\.meta\s*=\s*({.+?});?\s*</script>',
                         p_html, re.DOTALL
@@ -176,16 +227,18 @@ async def fetch_products(domain, proxy_str=None, max_retries=3):
                     if meta_match:
                         try:
                             meta = json.loads(meta_match.group(1))
-                            for v in meta.get('product', {}).get('variants', []):
+                            product = meta.get('product', {})
+                            # Sometimes page level has variantId directly
+                            page_vid = meta.get('page', {}).get('productVariantId')
+                            if page_vid:
+                                return {'variant_id': str(page_vid), 'price': str(product.get('price', '0.00'))}
+                            for v in product.get('variants', []):
                                 if v.get('available', True):
-                                    return {
-                                        'variant_id': str(v['id']),
-                                        'price': str(v.get('price', '0.00'))
-                                    }
+                                    return {'variant_id': str(v['id']), 'price': str(v.get('price', '0.00'))}
                         except Exception:
                             pass
 
-                    # Method C: window.__SHOPIFY_STATE__
+                    # 5c: window.__SHOPIFY_STATE__
                     state_match = re.search(
                         r'window\.__SHOPIFY_STATE__\s*=\s*({.+?});?\s*</script>',
                         p_html, re.DOTALL
@@ -199,162 +252,78 @@ async def fetch_products(domain, proxy_str=None, max_retries=3):
                                 for v in first.get('variants', []):
                                     vid = v.get('id') or v.get('variantId')
                                     if vid:
-                                        return {
-                                            'variant_id': str(vid),
-                                            'price': str(v.get('price', '0.00'))
-                                        }
+                                        return {'variant_id': str(vid), 'price': str(v.get('price', '0.00'))}
                         except Exception:
                             pass
 
-                    # Method D: brute-force variant IDs in page source
-                    ids = re.findall(r'["\']variantId["\']?\s*:\s*["\']?(\d{10,})["\']?', p_html)
+                    # 5d: window.__INITIAL_STATE__
+                    init_match = re.search(
+                        r'window\.__INITIAL_STATE__\s*=\s*({.+?});?\s*</script>',
+                        p_html, re.DOTALL
+                    )
+                    if init_match:
+                        try:
+                            state = json.loads(init_match.group(1))
+                            for v in state.get('product', {}).get('variants', []):
+                                if v.get('id'):
+                                    return {'variant_id': str(v['id']), 'price': str(v.get('price', '0.00'))}
+                        except Exception:
+                            pass
+
+                    # 5e: Brute-force variant IDs in source
+                    ids = re.findall(r'["\']variantId["\']?\s*[:=]\s*["\']?(\d{10,})["\']?', p_html)
                     if ids:
                         return {'variant_id': str(ids[0]), 'price': '0.00'}
 
-            if handles:
-                return False, "NO_AVAILABLE_PRODUCTS"
+            except aiohttp.ClientProxyConnectionError:
+                return False, "PROXY_ERROR"
+            except aiohttp.ClientHttpProxyError:
+                return False, "PROXY_ERROR"
+            except Exception as e:
+                err = str(e).lower()
+                if proxy_url and any(x in err for x in ['proxy', 'tunnel', 'connection', 'ssl']):
+                    return False, "PROXY_ERROR"
 
-    except aiohttp.ClientProxyConnectionError:
-        return False, "PROXY_ERROR"
-    except aiohttp.ClientHttpProxyError:
-        return False, "PROXY_ERROR"
-    except asyncio.TimeoutError:
-        pass
-    except Exception as e:
-        err = str(e).lower()
-        if proxy_url and any(x in err for x in ['proxy', 'tunnel', 'connection', 'ssl']):
-            return False, "PROXY_ERROR"
+        if handles:
+            return False, "NO_AVAILABLE_PRODUCTS"
 
-    # ═══════════════════════════════════════════════════════
-    # STRATEGY 2: JSON Fallback (only after HTML fails)
-    # ═══════════════════════════════════════════════════════
-    await asyncio.sleep(random.uniform(4, 7))
-
-    for attempt in range(max_retries):
+        # ── METHOD 6: JSON Fallback (long cooldown, last resort) ──
+        await asyncio.sleep(random.uniform(6, 10))
         try:
-            headers = get_random_browser_headers(domain)
-            headers.update({
+            j_headers = {
+                **nav_headers,
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Encoding': 'gzip, deflate, br',
-            })
-
-            timeout = aiohttp.ClientTimeout(total=15)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(
-                    f"{domain}/products.json?limit=50",
-                    proxy=proxy_url, headers=headers, ssl=False
-                ) as resp:
-                    if resp.status == 429:
-                        await asyncio.sleep(5 + attempt * 4)
-                        continue
-                    if resp.status != 200:
-                        return False, f"HTTP_{resp.status}"
-
-                    text = await resp.text()
-                    if not text.strip().startswith('{'):
-                        continue
-
-                    data = json.loads(text)
-                    for p in data.get('products', []):
-                        for v in p.get('variants', []):
-                            if v.get('available', False):
-                                return {
-                                    'variant_id': str(v['id']),
-                                    'price': str(v.get('price', '0.00'))
-                                }
-                    return False, "NO_AVAILABLE_PRODUCTS"
-
+                'X-Requested-With': 'XMLHttpRequest',
+                'Referer': domain,
+                'sec-fetch-site': 'same-origin',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-dest': 'empty',
+            }
+            async with session.get(f"{domain}/products.json?limit=50", proxy=proxy_url, headers=j_headers, ssl=False) as j_resp:
+                if j_resp.status == 429:
+                    return False, "PROXY_BANNED"
+                if j_resp.status != 200:
+                    return False, f"HTTP_{j_resp.status}"
+                text = await j_resp.text()
+                if not text.strip().startswith('{'):
+                    return False, "INVALID_JSON"
+                data = json.loads(text)
+                for p in data.get('products', []):
+                    for v in p.get('variants', []):
+                        if v.get('available', False):
+                            return {'variant_id': str(v['id']), 'price': str(v.get('price', '0.00'))}
+                return False, "NO_AVAILABLE_PRODUCTS"
         except aiohttp.ClientProxyConnectionError:
             return False, "PROXY_ERROR"
         except aiohttp.ClientHttpProxyError:
             return False, "PROXY_ERROR"
-        except asyncio.TimeoutError:
-            continue
         except Exception as e:
             err = str(e).lower()
             if proxy_url and any(x in err for x in ['proxy', 'tunnel', 'connection', 'ssl']):
                 return False, "PROXY_ERROR"
 
-    return False, "HTTP_429"
-
-
-    # ── Attempt 2: HTML Scraping Fallback (bypasses JSON blocks) ──
-    try:
-        html_headers = {
-            **base_headers,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-        }
-
-        timeout = aiohttp.ClientTimeout(total=20)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(domain, proxy=proxy_url, headers=html_headers, ssl=False) as resp:
-                if resp.status == 429:
-                    return False, "HTTP_429"
-                if resp.status != 200:
-                    return False, f"HTTP_{resp.status}"
-
-                html = await resp.text()
-
-                # Extract variant IDs embedded in Shopify theme JS/HTML
-                variant_patterns = [
-                    r'"variantId":(\d+)',
-                    r'"variantId&quot;:&quot;(\d+)&quot;',
-                    r'"variantId\\":\\"(\d+)\\"',
-                    r'data-variant-id="(\d+)"',
-                    r'value="(\d+)"[^>]*data-variant',
-                    r'"id":(\d+),"title":"[^"]*","option',
-                    r'\\"id\\":(\d+),\\"title\\"',
-                    r'"variants":\[\{"id":(\d+)',
-                ]
-
-                for pattern in variant_patterns:
-                    matches = re.findall(pattern, html)
-                    for match in matches:
-                        if match and len(str(match)) > 5:
-                            return {
-                                'variant_id': str(match),
-                                'price': '0.00'
-                            }
-
-                # Try to grab a product handle and hit its individual JSON
-                handle_match = re.search(r'href="/products/([^"\s?]+)', html)
-                if handle_match:
-                    handle = handle_match.group(1)
-                    product_json_url = f"{domain}/products/{handle}.json"
-                    async with session.get(product_json_url, proxy=proxy_url, headers=req_headers, ssl=False) as p_resp:
-                        if p_resp.status == 200:
-                            p_text = await p_resp.text()
-                            if p_text.strip().startswith('{'):
-                                p_data = json.loads(p_text)
-                                product = p_data.get('product', {})
-                                for v in product.get('variants', []):
-                                    if v.get('available', False):
-                                        return {
-                                            'variant_id': str(v['id']),
-                                            'price': str(v.get('price', '0.00'))
-                                        }
-
-                return False, "NO_VARIANTS_FOUND"
-
-    except aiohttp.ClientProxyConnectionError:
-        return False, "PROXY_ERROR"
-    except aiohttp.ClientHttpProxyError:
-        return False, "PROXY_ERROR"
-    except asyncio.TimeoutError:
-        return False, "TIMEOUT"
-    except Exception as e:
-        err = str(e).lower()
-        if proxy_url and any(x in err for x in ['proxy', 'tunnel', 'connection', 'ssl']):
-            return False, "PROXY_ERROR"
-        return False, "FETCH_FAILED"
-
-    return False, "HTTP_429"
+    return False, "SITE_BLOCKED_TRY_VARIANT"
+        
     
 
 
